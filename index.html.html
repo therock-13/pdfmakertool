@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Docmerge · Batch PDFs</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230ea5e9'/%3E%3Cstop offset='50%25' stop-color='%23ec4899'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath d='M18 16h20c1.1 0 2 .9 2 2v4H16v-4c0-1.1.9-2 2-2zm-2 10h28v22c0 1.1-.9 2-2 2H18c-1.1 0-2-.9-2-2V26zm6 4v3h16v-3H22zm0 7v3h12v-3H22z' fill='white'/%3E%3C/svg%3E" type="image/svg+xml"/>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<style>
+  :root {
+    --primary: #0ea5e9;
+    --primary-dark: #0284c7;
+    --accent: #ec4899;
+    --purple: #8b5cf6;
+    --mint: #14b8a6;
+    --peach: #fb923c;
+    --text: #0f172a;
+    --muted: #64748b;
+    --green: #10b981;
+    --glass: rgba(255,255,255,0.72);
+    --glass-border: rgba(255,255,255,0.55);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(ellipse 90% 70% at 5% 15%, rgba(6,182,212,0.32) 0%, transparent 55%),
+      radial-gradient(ellipse 75% 55% at 95% 8%, rgba(244,63,94,0.22) 0%, transparent 50%),
+      radial-gradient(ellipse 65% 55% at 75% 92%, rgba(99,102,241,0.25) 0%, transparent 50%),
+      radial-gradient(ellipse 55% 45% at 15% 85%, rgba(245,158,11,0.18) 0%, transparent 45%),
+      radial-gradient(ellipse 40% 35% at 50% 50%, rgba(16,185,129,0.1) 0%, transparent 50%),
+      linear-gradient(155deg, #ecfeff 0%, #fff1f2 30%, #eef2ff 60%, #fffbeb 100%);
+    background-attachment: fixed;
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ===== LOGIN SCREEN ===== */
+  #loginScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse 90% 70% at 10% 20%, rgba(6,182,212,0.4) 0%, transparent 55%),
+      radial-gradient(ellipse 75% 55% at 90% 12%, rgba(244,63,94,0.32) 0%, transparent 50%),
+      radial-gradient(ellipse 65% 55% at 65% 88%, rgba(99,102,241,0.3) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 40% at 25% 75%, rgba(245,158,11,0.2) 0%, transparent 45%),
+      linear-gradient(155deg, #a5f3fc 0%, #fecdd3 35%, #c7d2fe 65%, #fde68a 100%);
+    padding: 20px;
+  }
+
+  .login-card {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1.5px solid rgba(255,255,255,0.7);
+    border-radius: 24px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow:
+      0 20px 50px rgba(14,165,233,0.18),
+      0 8px 24px rgba(236,72,153,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.8);
+    text-align: center;
+    animation: cardIn 0.45s ease-out;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .login-logo {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #06b6d4, #f43f5e 50%, #6366f1);
+    margin: 0 auto 18px;
+    box-shadow:
+      0 10px 28px rgba(6,182,212,0.45),
+      0 4px 12px rgba(244,63,94,0.3);
+    position: relative;
+  }
+  .login-logo::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 17px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.35), transparent 60%);
+    pointer-events: none;
+  }
+
+  .login-title {
+    font-weight: 800;
+    font-size: 1.65rem;
+    background: linear-gradient(135deg, #0891b2, #e11d48, #4f46e5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+    letter-spacing: -0.4px;
+  }
+
+  .login-subtitle {
+    font-size: 0.88rem;
+    color: var(--muted);
+    margin-bottom: 30px;
+  }
+
+  .login-field {
+    text-align: left;
+    margin-bottom: 16px;
+  }
+
+  .login-field label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+    letter-spacing: 0.2px;
+  }
+
+  .login-field input {
+    width: 100%;
+    border: 1.5px solid #a5d8ff;
+    border-radius: 12px;
+    padding: 13px 15px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: rgba(255,255,255,0.9);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+
+  .login-field input:focus {
+    outline: none;
+    border-color: #0ea5e9;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(14,165,233,0.18);
+  }
+
+  .login-error {
+    color: #ef4444;
+    font-size: 0.82rem;
+    margin-bottom: 12px;
+    min-height: 20px;
+    font-weight: 600;
+  }
+
+  .login-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #06b6d4, #f43f5e 55%, #6366f1);
+    color: #fff;
+    border: none;
+    padding: 15px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 1.02rem;
+    cursor: pointer;
+    transition: all 0.25s;
+    box-shadow: 0 8px 24px rgba(6,182,212,0.35), 0 2px 8px rgba(244,63,94,0.2);
+    letter-spacing: 0.3px;
+  }
+
+  .login-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 32px rgba(244,63,94,0.4), 0 4px 12px rgba(6,182,212,0.25);
+  }
+
+  .login-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .login-hint {
+    margin-top: 18px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* Hide main app until logged in */
+  #appContent {
+    display: none;
+  }
+
+  /* ===== TOPBAR ===== */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1.5px solid rgba(125,211,252,0.6);
+    box-shadow: 0 4px 24px rgba(14,165,233,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .topbar .brand { display: flex; align-items: center; gap: 12px; }
+
+  .brand .logo {
+    width: 42px; height: 42px; border-radius: 13px;
+    background: linear-gradient(135deg, #06b6d4, #f43f5e 50%, #6366f1);
+    box-shadow: 0 5px 18px rgba(6,182,212,0.4), 0 2px 6px rgba(244,63,94,0.25);
+    position: relative;
+  }
+  .brand .logo::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.3), transparent 55%);
+    pointer-events: none;
+  }
+
+  .brand .name {
+    font-weight: 800; font-size: 1.3rem; letter-spacing: -0.4px;
+    background: linear-gradient(135deg, #0891b2, #e11d48, #4f46e5);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .brand .tagline { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .saved-pill {
+    font-size: 0.75rem; color: #047857;
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    padding: 6px 14px;
+    border-radius: 20px; font-weight: 700;
+    border: 1px solid #6ee7b7;
+    box-shadow: 0 2px 8px rgba(16,185,129,0.15);
+  }
+
+  .logout-btn {
+    font-size: 0.78rem;
+    color: #64748b;
+    background: rgba(255,255,255,0.85);
+    border: 1.5px solid #e2e8f0;
+    padding: 7px 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .logout-btn:hover {
+    border-color: #f87171;
+    color: #ef4444;
+    background: #fef2f2;
+    box-shadow: 0 2px 10px rgba(239,68,68,0.12);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #06b6d4, #6366f1);
+    color: #fff; border: none; padding: 9px 18px;
+    border-radius: 11px; font-weight: 700; font-size: 0.84rem;
+    cursor: pointer; transition: all 0.22s;
+    box-shadow: 0 4px 16px rgba(6,182,212,0.35);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(244,63,94,0.4);
+  }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  /* ===== STATUS ===== */
+  .status-wrap { display: none; }
+  .status-card {
+    background: linear-gradient(135deg, rgba(186,230,253,0.9), rgba(251,207,232,0.9), rgba(221,214,254,0.9));
+    backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(125,211,252,0.7);
+    border-radius: 18px;
+    padding: 16px 22px; margin: 16px 20px 0;
+    box-shadow: 0 6px 24px rgba(14,165,233,0.12);
+  }
+  .status-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .status-top .title { font-weight: 800; font-size: 0.98rem; }
+  .status-top .meta { font-size: 0.78rem; color: var(--muted); }
+  .status-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 10px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip-step {
+    font-size: 0.72rem; padding: 5px 13px; border-radius: 20px;
+    background: rgba(255,255,255,0.85); border: 1px solid #cbd5e1; color: var(--muted); font-weight: 500;
+    transition: all 0.2s;
+  }
+  .chip-step.active {
+    background: linear-gradient(135deg, #06b6d4, #f43f5e);
+    border-color: transparent; color: #fff; font-weight: 700;
+    box-shadow: 0 4px 14px rgba(6,182,212,0.4);
+    transform: scale(1.04);
+  }
+  .chip-step.done { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-color: #6ee7b7; color: #047857; font-weight: 600; }
+  .status-counts { font-size: 0.78rem; color: var(--muted); }
+
+  /* ===== LAYOUT ===== */
+  .layout { display: flex; gap: 0; align-items: flex-start; padding: 20px 24px 70px; }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: 330px; flex-shrink: 0;
+    background: rgba(255,255,255,0.65);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid rgba(125,211,252,0.55);
+    border-radius: 20px;
+    padding: 20px; margin-right: 20px;
+    max-height: calc(100vh - 50px); overflow-y: auto;
+    position: sticky; top: 80px;
+    box-shadow: 0 8px 32px rgba(14,165,233,0.1), inset 0 1px 0 rgba(255,255,255,0.7);
+  }
+
+  .step { padding: 16px 0; border-bottom: 1.5px solid rgba(186,230,253,0.7); }
+  .step:last-of-type { border-bottom: none; }
+
+  .step-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+
+  .step-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, #06b6d4, #f43f5e);
+    color: #fff; font-size: 0.74rem;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(6,182,212,0.4);
+  }
+
+  .step-title { font-weight: 700; font-size: 0.9rem; }
+  .step-optional { font-size: 0.68rem; color: var(--muted); font-weight: 500; }
+
+  .sidebar input[type=text],
+  .sidebar textarea {
+    width: 100%; border: 1.5px solid #a5d8ff; border-radius: 11px;
+    padding: 10px 13px; font-size: 0.84rem; font-family: inherit;
+    background: rgba(255,255,255,0.9); transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .sidebar input[type=text]:focus,
+  .sidebar textarea:focus {
+    outline: none; border-color: #0ea5e9;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.18);
+  }
+  .sidebar textarea { min-height: 70px; resize: vertical; }
+
+  .word-row { display: flex; gap: 6px; margin-bottom: 7px; align-items: center; }
+  .word-row input { flex: 1; min-width: 0; }
+  .word-row button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.95rem; padding: 4px; transition: color 0.15s; }
+  .word-row button:hover { color: #ef4444; }
+
+  .link-btn {
+    background: none; border: none; color: #0284c7;
+    font-size: 0.78rem; cursor: pointer; padding: 3px 0; font-weight: 600;
+    transition: color 0.15s;
+  }
+  .link-btn:hover { color: #ec4899; text-decoration: underline; }
+
+  .hint-small { display: none; }
+
+  .full-btn {
+    width: 100%; background: linear-gradient(135deg, #06b6d4, #6366f1);
+    color: #fff; border: none; padding: 11px; border-radius: 11px;
+    font-weight: 700; font-size: 0.84rem; cursor: pointer; margin-top: 9px;
+    transition: all 0.22s; box-shadow: 0 4px 14px rgba(6,182,212,0.3);
+  }
+  .full-btn:hover { transform: translateY(-2px); box-shadow: 0 7px 18px rgba(244,63,94,0.35); }
+  .full-btn.outline {
+    background: rgba(255,255,255,0.9); border: 1.5px solid #0ea5e9; color: #0284c7; box-shadow: none;
+  }
+  .full-btn.outline:hover { background: #e0f2fe; border-color: #0284c7; }
+  .full-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .create-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #06b6d4, #f43f5e 50%, #6366f1);
+    color: #fff; border: none; padding: 15px; border-radius: 14px;
+    font-weight: 800; font-size: 0.95rem; cursor: pointer; margin-top: 20px;
+    transition: all 0.25s; box-shadow: 0 8px 24px rgba(6,182,212,0.35);
+    letter-spacing: 0.2px;
+  }
+  .create-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(244,63,94,0.4), 0 4px 12px rgba(6,182,212,0.2);
+  }
+
+  /* ===== MAIN ===== */
+  .main { flex: 1; min-width: 0; }
+
+  .field-card {
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1.5px solid rgba(125,211,252,0.55);
+    border-radius: 20px;
+    padding: 22px; margin-bottom: 18px;
+    box-shadow: 0 8px 32px rgba(14,165,233,0.1), inset 0 1px 0 rgba(255,255,255,0.7);
+  }
+
+  .field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .field-head-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .field-title {
+    font-weight: 800; font-size: 0.88rem;
+    letter-spacing: 0.4px; color: #0369a1;
+    text-transform: uppercase;
+  }
+
+  /* ===== TOOLBAR ===== */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    background: linear-gradient(135deg, rgba(224,242,254,0.9), rgba(252,231,243,0.9));
+    border: 1.5px solid rgba(125,211,252,0.6);
+    border-radius: 12px;
+    flex: 1;
+    min-width: 0;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+  }
+
+  .toolbar select,
+  .toolbar button,
+  .toolbar .size-ctrl {
+    font-size: 0.78rem;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    border-radius: 7px;
+    padding: 5px 8px;
+    cursor: pointer;
+    color: #334155;
+    transition: all 0.15s;
+  }
+
+  .toolbar select:hover,
+  .toolbar button:hover {
+    border-color: #0ea5e9;
+    background: #e0f2fe;
+    box-shadow: 0 2px 6px rgba(14,165,233,0.12);
+  }
+
+  .toolbar button.active {
+    background: linear-gradient(135deg, #06b6d4, #6366f1);
+    color: #fff; border-color: transparent;
+    box-shadow: 0 2px 8px rgba(6,182,212,0.3);
+  }
+
+  .toolbar .size-ctrl {
+    display: flex; align-items: center; gap: 3px; padding: 2px 5px;
+  }
+
+  .toolbar .size-ctrl button {
+    width: 22px; height: 22px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; border: none; background: #f1f5f9; border-radius: 5px;
+  }
+  .toolbar .size-ctrl button:hover { background: #e0f2fe; }
+
+  .toolbar .size-ctrl span {
+    min-width: 18px; text-align: center; font-weight: 600; font-size: 0.78rem;
+  }
+
+  .toolbar .color-btn {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid #e2e8f0;
+    background: linear-gradient(135deg, #0ea5e9, #ec4899, #f59e0b, #10b981);
+    padding: 0; position: relative; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.15s;
+  }
+  .toolbar .color-btn:hover { transform: scale(1.1); }
+
+  .toolbar .color-btn input {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .toolbar .sep {
+    width: 1px; height: 18px; background: #94a3b8; margin: 0 3px; opacity: 0.5;
+  }
+
+  /* Title input */
+  #titleInput {
+    width: 100%; border: 2px solid #7dd3fc; border-radius: 12px;
+    padding: 13px 15px; font-size: 1.05rem; font-weight: 600;
+    font-family: inherit; margin-bottom: 10px;
+    transition: box-shadow 0.2s, border-color 0.2s; background: rgba(255,255,255,0.95);
+  }
+  #titleInput:focus {
+    outline: none;
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 4px rgba(14,165,233,0.18);
+  }
+
+  .slider-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  }
+  .slider-row input[type=range] {
+    flex: 1; accent-color: #0ea5e9; height: 6px;
+    border-radius: 4px;
+  }
+  .slider-row .pt-label {
+    font-size: 0.78rem; color: var(--muted); min-width: 40px;
+    text-align: right; font-weight: 700;
+  }
+
+  /* Description */
+  #descInput {
+    width: 100%; min-height: 420px;
+    border: 2px solid #a5d8ff; border-radius: 14px;
+    padding: 15px 17px; font-size: 0.94rem; font-family: inherit;
+    line-height: 1.65; resize: vertical;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: rgba(255,255,255,0.95);
+  }
+  #descInput:focus {
+    outline: none; border-color: #0ea5e9;
+    box-shadow: 0 0 0 4px rgba(14,165,233,0.15);
+  }
+
+  .field-hint { display: none; }
+
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #7dd3fc, #c084fc);
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== LOGIN SCREEN ==================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo"></div>
+    <div class="login-title">Docmerge</div>
+    <div class="login-subtitle">Login karke tool use karein</div>
+
+    <div class="login-field">
+      <label for="loginId">User ID</label>
+      <input type="text" id="loginId" placeholder="Apna ID likhein" autocomplete="username" />
+    </div>
+
+    <div class="login-field">
+      <label for="loginPassword">Password</label>
+      <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" />
+    </div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <button class="login-btn" id="loginBtn" onclick="handleLogin()">Login</button>
+  </div>
+</div>
+
+<!-- ==================== MAIN APP (hidden until login) ==================== -->
+<div id="appContent">
+
+<div class="topbar">
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <div class="name">Docmerge</div>
+      <div class="tagline">Batch PDFs — swap names and words across one document and export a personalized PDF for each</div>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <span class="saved-pill" id="savedPill">Saved just now</span>
+    <button class="logout-btn" onclick="handleLogout()">Logout</button>
+  </div>
+</div>
+
+<div class="status-wrap">
+  <div class="status-card">
+    <div class="status-top">
+      <div class="title" id="batchHeadline">Batch not run yet</div>
+      <div class="meta" id="batchMeta">0 replacements · 0ms elapsed</div>
+    </div>
+    <div class="status-row">
+      <div class="chips" id="stepChips">
+        <span class="chip-step" data-step="queued">Queued</span>
+        <span class="chip-step" data-step="processing">Processing</span>
+        <span class="chip-step" data-step="generating">Generating PDFs</span>
+        <span class="chip-step" data-step="zipping">Preparing</span>
+        <span class="chip-step" data-step="ready">Ready</span>
+      </div>
+      <div class="status-counts" id="statusCounts">0/0 generated · 0 failed</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <span class="step-title">Word / Find &amp; Replace</span>
+        <span class="step-optional">— Optional</span>
+      </div>
+      <div id="wordRows">
+        <div class="word-row">
+          <input placeholder="find" type="text" value="americas air"/>
+          <input placeholder="replace with" type="text" value="copa airlines"/>
+          <button onclick="this.parentElement.remove()">✕</button>
+        </div>
+      </div>
+      <button class="link-btn" onclick="addWordRow()">+ Add another word</button>
+      <button class="full-btn outline" onclick="applyWordReplace()">Replace</button>
+      <div class="hint-small" id="wordStatus">Set the words above, then hit Replace to apply the swap.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <span class="step-title">Replacement Numbers</span>
+        <span class="step-optional">— Optional</span>
+      </div>
+      <textarea id="numberTargets" placeholder="+55198325-9118"></textarea>
+      <button class="full-btn outline" onclick="applyNumberReplace()">Preview Replace</button>
+      <div class="hint-small" id="numberStatus">No 8–20 digit number found to replace.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">3</span>
+        <span class="step-title">Original Name</span>
+      </div>
+      <input id="originalName" placeholder="e.g. arsdecaa" type="text"/>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">4</span>
+        <span class="step-title">Replacement Names</span>
+      </div>
+      <textarea id="replacementNames" placeholder="Copa
+Delta"></textarea>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">5</span>
+        <span class="step-title">Output PDF Names</span>
+      </div>
+      <textarea id="outputNames" placeholder="copa-certificate
+delta-certificate"></textarea>
+      <div class="hint-small" id="namesCountHint">0 replacement name(s) · 0 output name(s)</div>
+    </div>
+
+    <button class="create-btn" id="convertAllBtn2" onclick="convertAll()">⬇️ Generate All &amp; Download as ZIP</button>
+  </div>
+
+  <div class="main">
+    <div class="field-card">
+      <!-- Header: Title label + Toolbar + Download (all same row) -->
+      <div class="field-head">
+        <div class="field-head-left">
+          <span class="step-num">1</span>
+          <span class="field-title">Title &amp; Description</span>
+        </div>
+
+        <div class="toolbar">
+          <select id="styleSelect" title="Text style">
+            <option>Normal text</option>
+            <option>Heading 1</option>
+            <option>Heading 2</option>
+            <option>Heading 3</option>
+          </select>
+
+          <select id="fontSelect" title="Font">
+            <option>Arial</option>
+            <option>Times New Roman</option>
+            <option>Georgia</option>
+            <option>Courier New</option>
+            <option>Verdana</option>
+          </select>
+
+          <div class="size-ctrl">
+            <button type="button" onclick="changeFontSize(-1)">−</button>
+            <span id="fontSizeLabel">11</span>
+            <button type="button" onclick="changeFontSize(1)">+</button>
+          </div>
+
+          <div class="sep"></div>
+
+          <button type="button" id="btnBold" onclick="toggleFormat(this)" title="Bold"><b>B</b></button>
+          <button type="button" id="btnItalic" onclick="toggleFormat(this)" title="Italic"><i>I</i></button>
+          <button type="button" id="btnUnderline" onclick="toggleFormat(this)" title="Underline"><u>U</u></button>
+
+          <div class="sep"></div>
+
+          <button type="button" class="color-btn" title="Text color">
+            <input type="color" id="textColor" value="#0f172a" onchange="applyColor(this.value)"/>
+          </button>
+        </div>
+
+        <button class="btn-primary" onclick="downloadSinglePreview()">Download PDF</button>
+      </div>
+
+      <input id="titleInput" oninput="livePreview()" placeholder="e.g. Certificate of Appreciation" type="text"/>
+
+      <div class="slider-row">
+        <input id="titleFontSize" max="40" min="12" oninput="livePreview()" type="range" value="20"/>
+        <span class="pt-label" id="titleFontLabel">20pt</span>
+      </div>
+
+      <textarea id="descInput" oninput="livePreview()" placeholder="Exactly what you paste here is exactly what appears in every PDF."></textarea>
+    </div>
+
+    <div class="field-card" style="text-align:center;">
+      <button class="btn-primary" id="convertAllBtn" onclick="convertAll()" style="width:100%; padding:16px; font-size:1rem;">
+        ⚙️ Convert All &amp; Download as ZIP
+      </button>
+      <div class="field-hint" id="convertAllStatus">
+        Word replace → Number replace → sabhi names ke PDFs banayega, phir sabko ek ZIP file me pack karke download karega.
+      </div>
+    </div>
+
+    <div class="field-card" id="fileListCard" style="display:none;">
+      <div class="field-title" style="margin-bottom:12px;">Individual PDFs</div>
+      <div id="fileListRows"></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end #appContent -->
+
+<script>
+/* ============================================================
+   LOGIN CREDENTIALS — yahan se change kar sakte ho
+   ============================================================ */
+const VALID_CREDENTIALS = [
+  { id: "admin", password: "admin@321" },
+];
+
+const LOGIN_STORAGE_KEY = "docmerge_logged_in";
+
+function isLoggedIn() {
+  return localStorage.getItem(LOGIN_STORAGE_KEY) === "true";
+}
+
+function setLoggedIn(value) {
+  if (value) {
+    localStorage.setItem(LOGIN_STORAGE_KEY, "true");
+  } else {
+    localStorage.removeItem(LOGIN_STORAGE_KEY);
+  }
+}
+
+function showApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appContent").style.display = "block";
+}
+
+function showLogin() {
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("appContent").style.display = "none";
+  document.getElementById("loginId").value = "";
+  document.getElementById("loginPassword").value = "";
+  document.getElementById("loginError").textContent = "";
+}
+
+function handleLogin() {
+  const id = document.getElementById("loginId").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const errorEl = document.getElementById("loginError");
+  const btn = document.getElementById("loginBtn");
+
+  if (!id || !password) {
+    errorEl.textContent = "ID aur Password dono bharo.";
+    return;
+  }
+
+  const valid = VALID_CREDENTIALS.some(
+    (c) => c.id === id && c.password === password
+  );
+
+  if (valid) {
+    errorEl.textContent = "";
+    btn.textContent = "Logging in...";
+    btn.disabled = true;
+    setTimeout(() => {
+      setLoggedIn(true);
+      showApp();
+      btn.textContent = "Login";
+      btn.disabled = false;
+    }, 400);
+  } else {
+    errorEl.textContent = "Galat ID ya Password. Phir se try karo.";
+    document.getElementById("loginPassword").value = "";
+    document.getElementById("loginPassword").focus();
+  }
+}
+
+function handleLogout() {
+  setLoggedIn(false);
+  showLogin();
+}
+
+// Enter key se bhi login
+document.addEventListener("DOMContentLoaded", () => {
+  if (isLoggedIn()) {
+    showApp();
+  } else {
+    showLogin();
+  }
+
+  const pwInput = document.getElementById("loginPassword");
+  const idInput = document.getElementById("loginId");
+  if (pwInput) {
+    pwInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleLogin();
+    });
+  }
+  if (idInput) {
+    idInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        document.getElementById("loginPassword").focus();
+      }
+    });
+  }
+});
+
+/* ============================================================
+   ORIGINAL TOOL CODE (unchanged)
+   ============================================================ */
+const { PDFDocument, rgb } = PDFLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+let generatedFiles = [];
+let currentFontSize = 11;
+
+function changeFontSize(delta) {
+  currentFontSize = Math.max(8, Math.min(36, currentFontSize + delta));
+  document.getElementById('fontSizeLabel').textContent = currentFontSize;
+  document.getElementById('descInput').style.fontSize = currentFontSize + 'px';
+}
+function toggleFormat(btn) { btn.classList.toggle('active'); }
+function applyColor(color) { document.getElementById('descInput').style.color = color; }
+document.getElementById('fontSelect').addEventListener('change', function() {
+  document.getElementById('descInput').style.fontFamily = this.value;
+});
+
+let fontsReady = null;
+async function loadFonts(){
+  if(fontsReady) return fontsReady;
+  fontsReady = (async () => {
+    const [sansBytes, boldBytes] = await Promise.all([
+      fetch('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf').then(r=>r.arrayBuffer()),
+      fetch('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Bold.ttf').then(r=>r.arrayBuffer())
+    ]);
+    return { sansBytes, boldBytes };
+  })();
+  return fontsReady;
+}
+
+const emojiImageCache = new Map();
+function toCodepoints(str){
+  const cps = [];
+  for(const ch of Array.from(str)) cps.push(ch.codePointAt(0).toString(16));
+  return cps.join('-');
+}
+async function fetchEmojiPng(cluster){
+  const key = toCodepoints(cluster);
+  if(emojiImageCache.has(key)) return emojiImageCache.get(key);
+  const url = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${key}.png`;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('not found');
+    const bytes = await res.arrayBuffer();
+    emojiImageCache.set(key, bytes);
+    return bytes;
+  }catch(e){
+    emojiImageCache.set(key, null);
+    return null;
+  }
+}
+const EMOJI_TEST = /\p{Extended_Pictographic}/u;
+const GLYPH_FONT_STACK = "sans-serif";
+const GLYPH_REF_PX = 100;
+let _measureCanvas = null;
+function getMeasureCtx(){
+  if(!_measureCanvas) _measureCanvas = document.createElement('canvas');
+  return _measureCanvas.getContext('2d');
+}
+function measureGlyphWidthAtSize(str, size, bold){
+  const ctx = getMeasureCtx();
+  ctx.font = `${bold ? 'bold ' : ''}${size}px ${GLYPH_FONT_STACK}`;
+  return ctx.measureText(str).width;
+}
+let fkFontRegular = null, fkFontBold = null;
+function ensureFontkitCoverage(sansBytes, boldBytes){
+  if(!fkFontRegular) fkFontRegular = fontkit.create(new Uint8Array(sansBytes.slice(0)));
+  if(!fkFontBold) fkFontBold = fontkit.create(new Uint8Array(boldBytes.slice(0)));
+}
+const glyphSupportCache = new WeakMap();
+function fontHasGlyph(fkFont, codePoint){
+  let cache = glyphSupportCache.get(fkFont);
+  if(!cache){ cache = new Map(); glyphSupportCache.set(fkFont, cache); }
+  if(cache.has(codePoint)) return cache.get(codePoint);
+  let result = false;
+  try{
+    const glyph = fkFont.glyphForCodePoint(codePoint);
+    result = !!(glyph && glyph.id !== 0);
+  }catch(e){ result = false; }
+  cache.set(codePoint, result);
+  return result;
+}
+function classifyCluster(cluster, fkFont){
+  if(EMOJI_TEST.test(cluster) && cluster.trim() !== '') return 'emoji';
+  if(cluster.trim() === '') return 'text';
+  if(!fkFont) return 'text';
+  for(const ch of Array.from(cluster)){
+    const cp = ch.codePointAt(0);
+    if(cp < 0x80) continue;
+    if(!fontHasGlyph(fkFont, cp)) return 'unsupported';
+  }
+  return 'text';
+}
+function colorToCss(color){
+  const r = Math.round(((color && color.red) || 0) * 255);
+  const g = Math.round(((color && color.green) || 0) * 255);
+  const b = Math.round(((color && color.blue) || 0) * 255);
+  return `rgb(${r},${g},${b})`;
+}
+async function rasterizeGlyphToPng(str, bold, colorCss){
+  const px = GLYPH_REF_PX;
+  const ctx = getMeasureCtx();
+  const fontStr = `${bold ? 'bold ' : ''}${px}px ${GLYPH_FONT_STACK}`;
+  ctx.font = fontStr;
+  const textWidthPx = Math.max(1, ctx.measureText(str).width);
+  const canvasHeightPx = Math.round(px * 1.4);
+  const baselineYpx = Math.round(px * 1.0);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(textWidthPx) + 2;
+  canvas.height = canvasHeightPx;
+  const c2 = canvas.getContext('2d');
+  c2.font = fontStr;
+  c2.textBaseline = 'alphabetic';
+  c2.fillStyle = colorCss;
+  c2.clearRect(0, 0, canvas.width, canvas.height);
+  c2.fillText(str, 1, baselineYpx);
+  return new Promise(resolve=>{
+    canvas.toBlob(blob=>{
+      if(!blob){ resolve(null); return; }
+      const reader = new FileReader();
+      reader.onload = () => resolve({
+        dataUrl: reader.result, textWidthPx,
+        canvasWidthPx: canvas.width, canvasHeightPx, baselineYpx
+      });
+      reader.readAsDataURL(blob);
+    }, 'image/png');
+  });
+}
+function dataUrlToBytes(dataUrl){
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+const embeddedGlyphCache = new WeakMap();
+async function embedGlyphOnce(pdfDoc, str, bold, color){
+  let cache = embeddedGlyphCache.get(pdfDoc);
+  if(!cache){ cache = new Map(); embeddedGlyphCache.set(pdfDoc, cache); }
+  const colorCss = colorToCss(color);
+  const key = str + '|' + (!!bold) + '|' + colorCss;
+  if(cache.has(key)) return cache.get(key);
+  const raster = await rasterizeGlyphToPng(str, bold, colorCss);
+  if(!raster){ cache.set(key, null); return null; }
+  try{
+    const img = await pdfDoc.embedPng(dataUrlToBytes(raster.dataUrl));
+    const result = { img, textWidthPx: raster.textWidthPx, canvasHeightPx: raster.canvasHeightPx, baselineYpx: raster.baselineYpx };
+    cache.set(key, result);
+    return result;
+  }catch(e){
+    cache.set(key, null);
+    return null;
+  }
+}
+
+function touchSaved(){
+  const el = document.getElementById('savedPill');
+  const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  el.textContent = 'Saved ' + t;
+}
+document.addEventListener('input', touchSaved);
+
+function livePreview(){
+  const size = document.getElementById('titleFontSize').value;
+  document.getElementById('titleFontLabel').textContent = size + 'pt';
+}
+document.getElementById('titleInput').value = 'Certificate of Appreciation';
+document.getElementById('descInput').value = 'This certificate is proudly presented to {name} in recognition of outstanding contribution. 🎉\n\nContact: 9876543210';
+livePreview();
+
+function addWordRow(find='', replace=''){
+  const wrap = document.getElementById('wordRows');
+  const row = document.createElement('div');
+  row.className='word-row';
+  row.innerHTML = `
+    <input type="text" placeholder="find" value="${find}">
+    <input type="text" placeholder="replace with" value="${replace}">
+    <button onclick="this.parentElement.remove()">✕</button>`;
+  wrap.appendChild(row);
+}
+addWordRow('americas air','copa airlines');
+
+function applyWordReplace(){
+  const rows = document.querySelectorAll('#wordRows .word-row');
+  let title = document.getElementById('titleInput').value;
+  let desc = document.getElementById('descInput').value;
+  let count = 0;
+  rows.forEach(row=>{
+    const inputs = row.querySelectorAll('input');
+    const find = inputs[0].value;
+    const replace = inputs[1].value;
+    if(!find) return;
+    const pattern = find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const re = new RegExp(pattern, 'gi');
+    const m1 = (title.match(re)||[]).length;
+    const m2 = (desc.match(re)||[]).length;
+    count += m1+m2;
+    title = title.replace(re, replace);
+    desc = desc.replace(re, replace);
+  });
+  document.getElementById('titleInput').value = title;
+  document.getElementById('descInput').value = desc;
+  document.getElementById('wordStatus').textContent = `${count} occurrences replaced.`;
+  livePreview();
+}
+
+const NUMBER_PATTERN = /\+?\d(?:[^\da-zA-Z\u0900-\u097F]{0,3}\d){7,19}/gu;
+function detectNumberMatches(text){
+  const broad = text.match(NUMBER_PATTERN) || [];
+  return broad.filter(m => {
+    const d = m.replace(/\D/gu,'').length;
+    return d>=8 && d<=20;
+  });
+}
+function replaceNumberSkeleton(match, replacementDigits){
+  let ptr = 0; let out = '';
+  for(const ch of Array.from(match)){
+    if(/\d/u.test(ch)){
+      if(ptr < replacementDigits.length){ out += replacementDigits[ptr]; ptr++; }
+    } else { out += ch; }
+  }
+  if(ptr < replacementDigits.length) out += replacementDigits.slice(ptr);
+  return out;
+}
+function applyNumberReplace(){
+  const targetsRaw = document.getElementById('numberTargets').value;
+  const targets = targetsRaw.split('\n').map(t=>t.trim()).filter(Boolean).map(t=>t.replace(/\D/g,''));
+  let title = document.getElementById('titleInput').value;
+  let desc = document.getElementById('descInput').value;
+  const matches = detectNumberMatches(title+'\n'+desc);
+  if(matches.length===0){
+    document.getElementById('numberStatus').textContent = 'No 8–20 digit number found to replace.';
+    return;
+  }
+  if(targets.length===0){
+    document.getElementById('numberStatus').textContent = `${matches.length} number(s) detected — add at least one replacement above.`;
+    return;
+  }
+  let idx = 0;
+  function replaceAllIn(text){
+    return text.replace(NUMBER_PATTERN, (m)=>{
+      const d = m.replace(/\D/gu,'').length;
+      if(d<8 || d>20) return m;
+      const rep = replaceNumberSkeleton(m, targets[idx % targets.length]);
+      idx++; return rep;
+    });
+  }
+  title = replaceAllIn(title); desc = replaceAllIn(desc);
+  document.getElementById('titleInput').value = title;
+  document.getElementById('descInput').value = desc;
+  document.getElementById('numberStatus').textContent = `All ${matches.length} number(s) replaced.`;
+  livePreview();
+}
+
+function updateNamesHint(){
+  const names = document.getElementById('replacementNames').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const outs = document.getElementById('outputNames').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  document.getElementById('namesCountHint').textContent = `${names.length} replacement name(s) · ${outs.length} output name(s)`;
+}
+['input','keyup','change','paste'].forEach(evt=>{
+  document.getElementById('replacementNames').addEventListener(evt, ()=>setTimeout(updateNamesHint,0));
+  document.getElementById('outputNames').addEventListener(evt, ()=>setTimeout(updateNamesHint,0));
+});
+updateNamesHint();
+
+function setStep(stepKey, doneKeys=[]){
+  document.querySelectorAll('.chip-step').forEach(chip=>{
+    chip.classList.remove('active','done');
+    if(doneKeys.includes(chip.dataset.step)) chip.classList.add('done');
+    if(chip.dataset.step===stepKey) chip.classList.add('active');
+  });
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function segmentWidth(seg, font, size){
+  if(seg.type==='text') return font.widthOfTextAtSize(seg.value, size);
+  if(seg.type==='emoji') return size;
+  if(seg.type==='glyph') return measureGlyphWidthAtSize(seg.value, size, seg.bold);
+  return 0;
+}
+function segmentText(text, fkFont){
+  const segments = [];
+  let segmenter = null;
+  if(typeof Intl !== 'undefined' && Intl.Segmenter){
+    segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+  }
+  let clusters;
+  if(segmenter){ clusters = Array.from(segmenter.segment(text), s => s.segment); }
+  else { clusters = Array.from(text); }
+  let buffer = ''; let bufferType = null;
+  function flush(){ if(buffer){ segments.push({type:bufferType, value:buffer}); buffer=''; } }
+  clusters.forEach(cluster=>{
+    const cls = classifyCluster(cluster, fkFont);
+    if(cls === 'emoji'){ flush(); segments.push({type:'emoji', value:cluster}); bufferType = null; }
+    else {
+      if(bufferType !== null && bufferType !== cls){ flush(); }
+      bufferType = cls; buffer += cluster;
+    }
+  });
+  flush(); return segments;
+}
+function wrapMixedParagraph(paragraph, font, size, maxWidth, fkFont, bold){
+  if(paragraph.trim()===''){ return [[]]; }
+  const segments = segmentText(paragraph, fkFont);
+  const tokens = [];
+  segments.forEach(seg=>{
+    if(seg.type==='emoji'){ tokens.push({type:'emoji', value:seg.value}); }
+    else if(seg.type==='unsupported'){
+      const words = seg.value.split(/(\s+)/).filter(w=>w.length>0);
+      words.forEach(w=>{
+        if(w.trim()===''){ tokens.push({type:'text', value:w}); }
+        else tokens.push({type:'glyph', value:w, bold});
+      });
+    } else {
+      const words = seg.value.split(/(\s+)/).filter(w=>w.length>0);
+      words.forEach(w=> tokens.push({type:'text', value:w}));
+    }
+  });
+  const lines = []; let currentLine = []; let currentWidth = 0;
+  tokens.forEach(tok=>{
+    const w = segmentWidth(tok, font, size);
+    if(currentWidth + w > maxWidth && currentLine.length>0){
+      lines.push(currentLine); currentLine = []; currentWidth = 0;
+      if(tok.type==='text' && tok.value.trim()===''){ return; }
+    }
+    currentLine.push(tok); currentWidth += w;
+  });
+  if(currentLine.length>0) lines.push(currentLine);
+  return lines;
+}
+function wrapMixedText(text, font, size, maxWidth, fkFont, bold){
+  const paragraphs = text.split('\n');
+  const allLines = [];
+  paragraphs.forEach(p=>{
+    wrapMixedParagraph(p, font, size, maxWidth, fkFont, bold).forEach(l=>allLines.push(l));
+  });
+  return allLines;
+}
+const embeddedEmojiCache = new WeakMap();
+async function embedEmojiOnce(pdfDoc, cluster){
+  let cache = embeddedEmojiCache.get(pdfDoc);
+  if(!cache){ cache = new Map(); embeddedEmojiCache.set(pdfDoc, cache); }
+  if(cache.has(cluster)) return cache.get(cluster);
+  const bytes = await fetchEmojiPng(cluster);
+  if(!bytes){ cache.set(cluster, null); return null; }
+  try{
+    const img = await pdfDoc.embedPng(bytes);
+    cache.set(cluster, img); return img;
+  }catch(e){ cache.set(cluster, null); return null; }
+}
+async function drawMixedLine(pdfDoc, page, tokens, x, y, size, font, color){
+  let cursorX = x;
+  for(const tok of tokens){
+    if(tok.type==='text'){
+      page.drawText(tok.value, {x:cursorX, y, size, font, color});
+      cursorX += font.widthOfTextAtSize(tok.value, size);
+    } else if(tok.type==='emoji'){
+      const img = await embedEmojiOnce(pdfDoc, tok.value);
+      if(img){ page.drawImage(img, {x:cursorX, y: y - size*0.12, width:size, height:size}); }
+      cursorX += size;
+    } else if(tok.type==='glyph'){
+      const rendered = await embedGlyphOnce(pdfDoc, tok.value, tok.bold, color);
+      if(rendered){
+        const scale = size / GLYPH_REF_PX;
+        const w = rendered.textWidthPx * scale;
+        const h = rendered.canvasHeightPx * scale;
+        const drawY = y - (rendered.canvasHeightPx - rendered.baselineYpx) * scale;
+        page.drawImage(rendered.img, {x:cursorX, y:drawY, width:w, height:h});
+        cursorX += w;
+      } else {
+        cursorX += measureGlyphWidthAtSize(tok.value, size, tok.bold);
+      }
+    }
+  }
+}
+async function preEmbedAllEmoji(pdfDoc, ...texts){
+  const clusters = new Set();
+  texts.forEach(t=>{
+    segmentText(t, null).forEach(seg=>{ if(seg.type==='emoji') clusters.add(seg.value); });
+  });
+  await Promise.all(Array.from(clusters).map(c=> embedEmojiOnce(pdfDoc, c)));
+}
+function hexToRgb(hex) {
+  const h = (hex || '#0f172a').replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const num = parseInt(full, 16);
+  if (isNaN(num)) return rgb(0.06, 0.09, 0.16);
+  return rgb(
+    ((num >> 16) & 255) / 255,
+    ((num >> 8) & 255) / 255,
+    (num & 255) / 255
+  );
+}
+
+async function buildSinglePdf(title, description, titleSize){
+  const { sansBytes, boldBytes } = await loadFonts();
+  ensureFontkitCoverage(sansBytes, boldBytes);
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
+  let page = pdfDoc.addPage([595.28, 841.89]);
+  const fontRegular = await pdfDoc.embedFont(sansBytes, { subset: true });
+  const fontBold = await pdfDoc.embedFont(boldBytes, { subset: true });
+  await preEmbedAllEmoji(pdfDoc, title, description);
+
+  // Read live settings from the description toolbar
+  const bodyColorHex = document.getElementById('textColor')?.value || '#0f172a';
+  const bodyColor = hexToRgb(bodyColorHex);
+  const bodySize = Math.max(8, Math.min(36, currentFontSize || 12));
+  const isBold = document.getElementById('btnBold')?.classList.contains('active');
+  const bodyFont = isBold ? fontBold : fontRegular;
+  const bodyFk = isBold ? fkFontBold : fkFontRegular;
+
+  const margin = 56; const pageWidth = 595.28; const maxWidth = pageWidth - margin*2;
+  let y = 841.89 - margin;
+
+  // Title (always bold, dark color for contrast)
+  const titleLines = wrapMixedText(title, fontBold, Number(titleSize), maxWidth, fkFontBold, true);
+  for(const line of titleLines){
+    await drawMixedLine(pdfDoc, page, line, margin, y, Number(titleSize), fontBold, rgb(0.1,0.1,0.12));
+    y -= Number(titleSize)*1.3;
+  }
+  y -= 14;
+
+  // Description body — uses selected color, size and bold from toolbar
+  const bodyLines = wrapMixedText(description, bodyFont, bodySize, maxWidth, bodyFk, isBold);
+  for(const line of bodyLines){
+    if(y < margin+20){ page = pdfDoc.addPage([595.28, 841.89]); y = 841.89 - margin; }
+    await drawMixedLine(pdfDoc, page, line, margin, y, bodySize, bodyFont, bodyColor);
+    y -= bodySize*1.5;
+  }
+  const bytes = await pdfDoc.save();
+  return new Blob([bytes], {type:'application/pdf'});
+}
+
+async function createPdfs(){
+  const startTime = performance.now();
+  const baseTitle = document.getElementById('titleInput').value || 'Untitled';
+  const baseDesc = document.getElementById('descInput').value || '';
+  const titleSize = document.getElementById('titleFontSize').value;
+  const originalName = document.getElementById('originalName').value.trim();
+  const names = document.getElementById('replacementNames').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const outNames = document.getElementById('outputNames').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(names.length===0){ alert('Kam se kam ek Replacement Name do (Step 4)'); return; }
+  generatedFiles = [];
+  setStep('queued');
+  document.getElementById('batchHeadline').textContent = 'Batch running...';
+  await sleep(200);
+  setStep('processing', ['queued']);
+  document.getElementById('batchHeadline').textContent = 'Loading fonts...';
+  await loadFonts(); await sleep(150);
+  setStep('generating', ['queued','processing']);
+  document.getElementById('batchHeadline').textContent = 'Batch running...';
+  let totalReplacements = 0, generatedCount = 0, failed = 0;
+  for(let i=0;i<names.length;i++){
+    const name = names[i];
+    const outName = (outNames[i] || name.toLowerCase().replace(/\s+/g,'-')).replace(/\.pdf$/i,'') + '.pdf';
+    let title = baseTitle, desc = baseDesc;
+    if(originalName){
+      const pattern = originalName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const re = new RegExp(pattern, 'gi');
+      totalReplacements += ((title.match(re)||[]).length + (desc.match(re)||[]).length);
+      title = title.replace(re, name); desc = desc.replace(re, name);
+    }
+    title = title.split('{name}').join(name);
+    desc = desc.split('{name}').join(name);
+    try{
+      const blob = await buildSinglePdf(title, desc, titleSize);
+      generatedFiles.push({name: outName, blob}); generatedCount++;
+    }catch(err){ failed++; console.error('PDF generation failed for', outName, err); }
+    document.getElementById('statusCounts').textContent = `${generatedCount}/${names.length} generated · ${failed} failed`;
+    await sleep(50);
+  }
+  if(generatedCount===0) alert('Koi bhi PDF generate nahi ho payi.');
+  setStep('zipping', ['queued','processing','generating']);
+  document.getElementById('batchHeadline').textContent = 'Preparing downloads...';
+  await sleep(150);
+  setStep('ready', ['queued','processing','generating','zipping']);
+  const elapsed = Math.round(performance.now()-startTime);
+  document.getElementById('batchHeadline').textContent = 'Batch ready';
+  document.getElementById('batchMeta').textContent = `${totalReplacements} name replacements · ${elapsed}ms elapsed`;
+  document.getElementById('statusCounts').textContent = `${generatedCount}/${names.length} generated · ${failed} failed`;
+}
+
+function renderFileList(){
+  const card = document.getElementById('fileListCard');
+  const rows = document.getElementById('fileListRows');
+  rows.innerHTML = '';
+  if(generatedFiles.length===0){ card.style.display='none'; return; }
+  card.style.display='block';
+  generatedFiles.forEach(f=>{
+    const url = URL.createObjectURL(f.blob);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #bae6fd; gap:10px;';
+    const sizeKb = (f.blob.size/1024).toFixed(1);
+    row.innerHTML = `
+      <span style="font-size:.82rem;">${f.name} <span style="color:var(--muted); font-size:.72rem;">(${sizeKb} KB)</span></span>
+      <a href="${url}" download="${f.name}" class="btn-primary" style="text-decoration:none; padding:6px 14px; font-size:.78rem;">Download</a>`;
+    rows.appendChild(row);
+  });
+}
+
+async function downloadAllAsZip(){
+  if(generatedFiles.length===0){ alert('Pehle PDFs generate karo.'); return; }
+  const statusEl = document.getElementById('convertAllStatus');
+  statusEl.textContent = `⏳ Zipping ${generatedFiles.length} PDF(s)...`;
+  const zip = new JSZip();
+  generatedFiles.forEach(f=>{ zip.file(f.name, f.blob); });
+  const zipBlob = await zip.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:6}});
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'docmerge-pdfs.zip';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 5000);
+  const zipKb = (zipBlob.size/1024).toFixed(1);
+  statusEl.textContent = `✅ Done — ${generatedFiles.length} PDF(s) zipped (${zipKb} KB) and downloaded as one file.`;
+}
+
+async function convertAll(){
+  const btn = document.getElementById('convertAllBtn');
+  const btn2 = document.getElementById('convertAllBtn2');
+  const statusEl = document.getElementById('convertAllStatus');
+  btn.disabled = true; btn2.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = '⏳ Converting...';
+  try{
+    applyWordReplace(); applyNumberReplace();
+    await createPdfs(); renderFileList();
+    if(generatedFiles.length>0) await downloadAllAsZip();
+    else statusEl.textContent = '⚠️ Koi PDF generate nahi hui.';
+  }catch(err){
+    statusEl.textContent = '⚠️ Kuch galat hua: ' + err.message;
+  }finally{
+    btn.disabled = false; btn2.disabled = false; btn.textContent = originalLabel;
+  }
+}
+
+async function downloadSinglePreview(){
+  const title = document.getElementById('titleInput').value || 'Untitled';
+  const desc = document.getElementById('descInput').value || '';
+  const size = document.getElementById('titleFontSize').value;
+  const blob = await buildSinglePdf(title, desc, size);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = (title.toLowerCase().replace(/\s+/g,'-')||'document') + '.pdf'; a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
